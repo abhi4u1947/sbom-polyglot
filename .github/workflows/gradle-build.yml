@@ -1,0 +1,314 @@
+name: Gradle Build and SBOM
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+      contents: write
+
+    strategy:
+      matrix:
+        project:
+          - normal
+          - quarkus
+          - native
+
+    env:
+      PROJECT_PATH: ${{ github.workspace }}/java-app/gradle-parent
+      IMAGE_PUSH: true # Change to true if you want to push images
+      IMAGE_REGISTRY: ghcr.io
+      IMAGE_GROUP: ${{ github.repository_owner }}
+      IMAGE_NAME: java-sbom-cdx-gradle-${{ matrix.project }}
+      IMAGE_TAG: ${{ github.sha }}
+
+      # OCI Metadata
+      IMAGE_AUTHOR: ${{ github.actor }}
+      IMAGE_SOURCE: https://github.com/${{ github.repository }}
+      IMAGE_LICENSE: Apache-2.0
+      BUILDER_IMAGE_NAME: docker.io/paketobuildpacks/builder-jammy-java-tiny
+      BUILDER_IMAGE_TAG: 0.0.20
+      BP_JVM_VERSION: 23
+      IMAGE_REGISTRY_USERNAME: ${{ github.actor }}
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.GIT_ACTIONS_PAT }}
+
+      UPLOAD_ARTIFACTS_NAME: gradle-${{ matrix.project }}-artifacts
+      UPLOAD_SBOM_ARTIFACTS_NAME: gradle-${{ matrix.project }}-sboms
+      SKIP_SYFT: false  # Set to false to re-enable Syft
+      SKIP_CDXGEN: false  # Set to false to re-enable Cdxgen
+
+      # CDXGen Config
+      FETCH_LICENSE: true
+      CDXGEN_DEBUG_MODE: verbose
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+      # Gradle Cache
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ matrix.project }}-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          gradle-${{ matrix.project }}-${{ runner.os }}-
+
+      # GraalVM Native Image Cache
+    - name: Cache GraalVM native-image cache
+      uses: actions/cache@v4
+      if: matrix.project == 'native'
+      with:
+        path: ~/.native-image
+        key: graalvm-${{ matrix.project }}-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          graalvm-${{ matrix.project }}-${{ runner.os }}-
+
+      # Docker Layer Cache (for pack CLI or spring-boot:build-image)
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/buildpacks
+        key: docker-layers-${{ matrix.project }}-${{ runner.os }}-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          docker-layers-${{ matrix.project }}-${{ runner.os }}-
+
+    - name: Login to Docker Hub (for pulling base images)
+      uses: docker/login-action@v3
+      with:
+        registry: docker.io
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Login to GitHub Container Registry (for pushing final image)
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up JDK 23
+      if: matrix.project != 'native'
+      uses: actions/setup-java@v4
+      with:
+        java-version: 23
+        distribution: 'temurin'
+
+    - uses: graalvm/setup-graalvm@v1
+      if: matrix.project == 'native'
+      with:
+        java-version: 23
+        distribution: 'graalvm'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Node.js (latest LTS)
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'lts/*'
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'  # Or latest stable
+
+    - name: Verify Node and npm version
+      run: |
+        node -v
+        npm -v
+
+    - name: Install cdxgen CLI
+      if: env.SKIP_CDXGEN != 'true'
+      run: npm install -g @cyclonedx/cdxgen
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x ${{ env.PROJECT_PATH }}/gradlew
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Build JAR with Gradle
+      if: matrix.project != 'native'
+      run: ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:build
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Build Native Executable (only for native project)
+      if: matrix.project == 'native'
+      run: ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:nativeCompile
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Generate SBOM
+      run: ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:cyclonedxBom
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Extract Version from Gradle Project
+      if: matrix.project == 'quarkus'
+      id: extract_version
+      run: |
+        VERSION=$(../gradlew --no-daemon -q properties -Dorg.gradle.internal.launcher.welcomeMessageEnabled=false | grep "^version:" | awk '{ print $2 }')
+        echo "Detected version: $VERSION"
+        echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Build Container Image for Quarkus
+      if: matrix.project == 'quarkus'
+      run: |
+        ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:imageBuild \
+          -DskipTests \
+          --info \
+          --stacktrace \
+          -Dquarkus.log.level=INFO \
+          -Dquarkus.container-image.build=true \
+          -Dquarkus.container-image.builder=docker \
+          -Dquarkus.docker.buildx.platform=linux/amd64 \
+          -Dquarkus.container-image.push=${{ env.IMAGE_PUSH }} \
+          -Dquarkus.container-image.username=${{ github.actor }} \
+          -Dquarkus.container-image.password=${{ secrets.GIT_ACTIONS_PAT }} \
+          -Dquarkus.docker.dockerfile-jvm-path=${{ env.PROJECT_PATH }}/${{ matrix.project }}/src/main/docker/Dockerfile.jvm \
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Build Container Image for Spring Boot (Gradle)
+      if: matrix.project != 'quarkus'
+      run: |
+        ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:bootBuildImage -DskipTests --info --stacktrace
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Show current workspace (build|target)
+      run: |
+        echo "Workspace directory structure:"
+        for d in $(find . -type d \( -name build -o -name target \) | sort); do
+          echo "Showing contents of: $d"
+          tree -a -L 15 -I 'tmp|resources|generated|classes|test|test-*|generated-*|spring-aot|graalvm-reachability-metadata' "$d"
+        done
+      working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.UPLOAD_ARTIFACTS_NAME }}
+        path: |
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/libs/**/*.jar
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/**/*.sbom.json
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/**/application.cdx.json
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/*-dependency-cyclonedx.json
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/**/*-dependency-cyclonedx.json
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/native/**
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/quarkus-app/**
+          !${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/resources/**
+          !${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/libs/**/*-plain.jar
+          !${{ env.PROJECT_PATH }}/${{ matrix.project }}/build/native/generated/
+        if-no-files-found: ignore
+
+    - name: Download Uploaded Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.UPLOAD_ARTIFACTS_NAME }}
+        path: ./extracted-artifacts
+
+    - name: Show extracted artifact tree
+      run: tree -a -L 4 ./extracted-artifacts
+
+    - name: SBOM (syft) create output directory
+      if: env.SKIP_SYFT != 'true'
+      run: mkdir -p sboms/syft/
+
+    - name: SBOM (syft) for Spring Boot JAR
+      if: matrix.project == 'normal' && env.SKIP_SYFT != 'true'
+      uses: anchore/sbom-action@v0.18.0
+      with:
+        path: ./extracted-artifacts/libs
+        output-file: sboms/syft/${{ env.IMAGE_NAME }}.syft.cdx.json
+        format: cyclonedx-json
+        config: .syft/java-config.yaml
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: SBOM (syft) for Quarkus App Binaries
+      if: matrix.project == 'quarkus' && env.SKIP_SYFT != 'true'
+      uses: anchore/sbom-action@v0.18.0
+      with:
+        path: ./extracted-artifacts/quarkus-app
+        output-file: sboms/syft/${{ env.IMAGE_NAME }}.syft.cdx.json
+        config: .syft/java-config.yaml
+        format: cyclonedx-json
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: SBOM (syft) for GraalVM Native Binary
+      if: matrix.project == 'native' && env.SKIP_SYFT != 'true'
+      uses: anchore/sbom-action@v0.18.0
+      with:
+        file: ./extracted-artifacts/native/nativeCompile/${{ env.IMAGE_NAME }}
+        output-file: sboms/syft/${{ env.IMAGE_NAME }}.syft.cdx.json
+        config: .syft/java-config.yaml
+        format: cyclonedx-json
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: SBOM (syft) for Container Image
+      if: env.SKIP_SYFT != 'true'
+      uses: anchore/sbom-action@v0.18.0
+      with:
+        image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        format: cyclonedx-json
+        config: .syft/container-config.yaml
+        output-file: sboms/syft/${{ env.IMAGE_NAME }}-container.syft.cdx.json
+        upload-artifact: false
+        upload-release-assets: false
+        registry-username: ${{ github.actor }}
+        registry-password: ${{ secrets.GIT_ACTIONS_PAT }}
+
+    - name: SBOM (cdxgen) Make CDXGen script executable
+      if: env.SKIP_CDXGEN != 'true'
+      run: chmod +x .github/scripts/generate-cdxgen-sbom.sh
+
+    - name: SBOM (cdxgen) create output directory
+      if: env.SKIP_CDXGEN != 'true'
+      run: mkdir -p sboms/cdxgen/
+
+    - name: SBOM (cdxgen) for Spring Boot
+      if: matrix.project == 'normal' && env.SKIP_CDXGEN != 'true'
+      run: .github/scripts/generate-cdxgen-sbom.sh
+      env:
+        CONF_PROJECT_DIR: ./extracted-artifacts/libs
+        CONF_ECOSYSTEMS: java gradle jar
+        CONF_RESULT_PATH: sboms/cdxgen/${{ env.IMAGE_NAME }}.cdxgen.cdx.json
+
+    - name: SBOM (cdxgen) for Quarkus
+      if: matrix.project == 'quarkus' && env.SKIP_CDXGEN != 'true'
+      run: .github/scripts/generate-cdxgen-sbom.sh
+      env:
+        CONF_PROJECT_DIR: ./extracted-artifacts/quarkus-app
+        CONF_ECOSYSTEMS: java gradle quarkus jar
+        CONF_RESULT_PATH: sboms/cdxgen/${{ env.IMAGE_NAME }}.cdxgen.cdx.json
+
+    - name: SBOM (cdxgen) for GraalVM Native
+      if: matrix.project == 'native' && env.SKIP_CDXGEN != 'true'
+      run: .github/scripts/generate-cdxgen-sbom.sh
+      env:
+        CONF_PROJECT_DIR: ./extracted-artifacts/native/nativeCompile
+        CONF_ECOSYSTEMS: java gradle binary blint
+        CONF_RESULT_PATH: sboms/cdxgen/${{ env.IMAGE_NAME }}.cdxgen.cdx.json
+
+    - name: SBOM (cdxgen) for Container Image
+      if: env.SKIP_CDXGEN != 'true'
+      run: .github/scripts/generate-cdxgen-sbom.sh
+      env:
+        CONF_PROJECT_DIR: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        CONF_ECOSYSTEMS: docker jar
+        CONF_RESULT_PATH: sboms/cdxgen/${{ env.IMAGE_NAME }}-container.cdxgen.cdx.json
+
+    - name: Upload Combined SBOMs (ALL)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.UPLOAD_SBOM_ARTIFACTS_NAME }}
+        path: sboms/
+        if-no-files-found: warn
