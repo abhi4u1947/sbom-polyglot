@@ -1,0 +1,67 @@
+import io.quarkus.gradle.tasks.QuarkusBuild
+
+plugins {
+    id 'java'
+    id 'io.quarkus' version '3.21.0'
+    id 'org.cyclonedx.bom' version '2.2.0'
+}
+
+group = 'com.nc'
+version = '1.0.0-SNAPSHOT'
+
+//noinspection GroovyUnusedAssignment
+archivesBaseName = 'java-sbom-cdx-gradle-quarkus'
+
+repositories {
+    mavenCentral()
+    maven {
+        url 'https://plugins.gradle.org/m2/'
+    }
+}
+
+dependencies {
+    implementation 'io.quarkus:quarkus-container-image-docker'
+    implementation enforcedPlatform('io.quarkus:quarkus-bom:3.21.0')
+    implementation 'io.quarkus:quarkus-resteasy'
+    implementation 'io.quarkus:quarkus-cyclonedx'
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation 'io.rest-assured:rest-assured'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+def allProps = [
+        IMAGE_REGISTRY: System.getenv('IMAGE_REGISTRY') ?: 'ghcr.io',
+        IMAGE_NAME    : System.getenv('IMAGE_NAME') ?: 'default',
+        IMAGE_GROUP   : System.getenv('IMAGE_GROUP') ?: 'default',
+        IMAGE_TAG     : System.getenv('IMAGE_TAG') ?: 'latest',
+        IMAGE_AUTHOR  : System.getenv('IMAGE_AUTHOR') ?: 'unknown',
+        IMAGE_LICENSE : System.getenv('IMAGE_LICENSE') ?: 'Apache-2.0',
+        IMAGE_SOURCE  : System.getenv('IMAGE_SOURCE') ?: 'unknown',
+        APP_VERSION: System.getenv('APP_VERSION') ?: 'unknown',
+]
+
+processResources {
+    filesMatching("**/application.properties") {
+        expand(allProps)
+    }
+}
+
+tasks.named('cyclonedxBom') {
+    schemaVersion = "1.6"
+    includeConfigs = ["runtimeClasspath", "compileClasspath"]
+
+    // Optional: Avoid including the root or test-only subprojects
+    skipProjects = [rootProject.name]
+
+    projectType = "application"
+
+    includeBomSerialNumber = true
+    includeLicenseText = false
+
+    destination = file("build/reports")
+    outputName = "application.cdx"
+    outputFormat = "json"
+}

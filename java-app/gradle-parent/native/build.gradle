@@ -1,0 +1,91 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.2'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.graalvm.buildtools.native' version '0.10.4'
+    id 'org.cyclonedx.bom' version '2.2.0'
+}
+
+group = 'com.nc'
+version = '1.0-SNAPSHOT'
+
+//noinspection GroovyUnusedAssignment
+archivesBaseName = 'java-sbom-cdx-gradle-native' // This sets the artifactId
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(23)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
+graalvmNative {
+    binaries {
+        configureEach {
+            buildArgs.add("--enable-sbom=classpath,export")
+            imageName = "java-sbom-cdx-gradle-native"
+        }
+    }
+}
+
+tasks.named('bootBuildImage') {
+    def registry = System.getenv('IMAGE_REGISTRY')
+    def group = System.getenv('IMAGE_GROUP')
+    def name = System.getenv('IMAGE_NAME')
+    def shaTag = System.getenv('IMAGE_TAG')
+    def versionTag = project.version
+    def latestTag = 'latest'
+
+    imageName = "${registry}/${group}/${name}:${shaTag}"
+    builder = "${System.getenv('BUILDER_IMAGE_NAME')}:${System.getenv('BUILDER_IMAGE_TAG')}"
+    publish = System.getenv('IMAGE_PUSH')?.toBoolean() ?: false
+
+    environment = [
+            "BP_JVM_VERSION": System.getenv('BP_JVM_VERSION'),
+            "BP_OCI_AUTHORS": System.getenv('IMAGE_AUTHOR'),
+            "BP_OCI_SOURCE": System.getenv('IMAGE_SOURCE'),
+            "BP_OCI_LICENSES": System.getenv('IMAGE_LICENSE')
+    ]
+
+    tags = [
+            "${registry}/${group}/${name}:${versionTag}",
+            "${registry}/${group}/${name}:${latestTag}"
+    ]
+
+    docker {
+        publishRegistry {
+            username = System.getenv("IMAGE_REGISTRY_USERNAME")
+            password = System.getenv("IMAGE_REGISTRY_PASSWORD")
+        }
+    }
+}
+
+tasks.named('cyclonedxBom') {
+    schemaVersion = "1.6"
+    includeConfigs = ["runtimeClasspath", "compileClasspath"]
+
+    // Optional: Avoid including the root or test-only subprojects
+    skipProjects = [rootProject.name]
+
+    projectType = "application"
+
+    includeBomSerialNumber = true
+    includeLicenseText = false
+
+    destination = file("build/reports")
+    outputName = "application.cdx"
+    outputFormat = "json"
+}

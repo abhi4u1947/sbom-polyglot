@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--suppress MavenModelInspection -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.2</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>com.nc</groupId>
+    <artifactId>java-sbom-cdx-maven-normal</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>maven</name>
+    <description>maven</description>
+    <properties>
+        <java.version>23</java.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>3.4.2</version>
+                <configuration>
+                    <image>
+                        <name>${env.IMAGE_REGISTRY}/${env.IMAGE_GROUP}/${env.IMAGE_NAME}:${env.IMAGE_TAG}</name>
+                        <builder>${env.BUILDER_IMAGE_NAME}:${env.BUILDER_IMAGE_TAG}</builder>
+                        <publish>${env.IMAGE_PUSH}</publish>
+                        <!-- Add additional tags -->
+                        <tags>
+                            <tag>${env.IMAGE_REGISTRY}/${env.IMAGE_GROUP}/${env.IMAGE_NAME}:${project.version}</tag>
+                            <tag>${env.IMAGE_REGISTRY}/${env.IMAGE_GROUP}/${env.IMAGE_NAME}:latest</tag>
+                        </tags>
+                        <env>
+                            <BP_JVM_VERSION>${env.BP_JVM_VERSION}</BP_JVM_VERSION>
+                            <!-- OCI Metadata -->
+                            <BP_OCI_AUTHORS>${env.IMAGE_AUTHOR}</BP_OCI_AUTHORS>
+                            <BP_OCI_SOURCE>${env.IMAGE_SOURCE}</BP_OCI_SOURCE>
+                            <BP_OCI_LICENSES>${env.IMAGE_LICENSE}</BP_OCI_LICENSES>
+                        </env>
+                        <verboseLogging>true</verboseLogging>
+                    </image>
+                    <docker>
+                        <publishRegistry>
+                            <username>${env.IMAGE_REGISTRY_USERNAME}</username>
+                            <password>${env.IMAGE_REGISTRY_PASSWORD}</password>
+                        </publishRegistry>
+                    </docker>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+                <version>2.9.1</version>
+                <configuration>
+                    <projectType>application</projectType>
+                    <outputName>application.cdx</outputName>
+                    <outputFormat>json</outputFormat>
+                    <schemaVersion>1.6</schemaVersion>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

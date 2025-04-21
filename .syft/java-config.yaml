@@ -1,0 +1,42 @@
+output:
+  - "cyclonedx-json"
+
+quiet: false
+check-for-app-update: false
+parallelism: 2
+
+scope: "squashed"
+
+format:
+  cyclonedx-json:
+    pretty: false
+
+file:
+  metadata:
+    selection: "all"
+    digests:
+      - "sha256"
+      - "sha512"
+  content:
+    skip-files-above-size: 1048576
+    globs: []
+
+package:
+  search-indexed-archives: true
+  search-unindexed-archives: false
+  exclude-binary-overlap-by-ownership: true
+
+java:
+  maven-url: "https://repo1.maven.org/maven2"
+  max-parent-recursive-depth: 5
+  use-network: true
+
+source:
+  file:
+    digests:
+      - "sha256"
+      - "sha512"
+
+log:
+  structured: false
+  level: "error"
