@@ -10,7 +10,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.nc</groupId>
-    <artifactId>java-sbom-cdx-maven-normal</artifactId>
+    <artifactId>sbom-polyglot-java-cdx-maven-normal</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>maven</name>
     <description>maven</description>

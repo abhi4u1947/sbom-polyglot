@@ -9,7 +9,7 @@ group = 'com.nc'
 version = '1.0-SNAPSHOT'
 
 //noinspection GroovyUnusedAssignment
-archivesBaseName = 'java-sbom-cdx-gradle-normal' // This sets the artifactId
+archivesBaseName = 'sbom-polyglot-java-cdx-gradle-normal' // This sets the artifactId
 
 java {
     toolchain {

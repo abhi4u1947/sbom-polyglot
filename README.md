@@ -192,7 +192,7 @@ graalvmNative {
     binaries {
         configureEach {
             buildArgs.add("--enable-sbom=classpath,export")
-            imageName = "java-sbom-cdx-gradle-native"
+            imageName = "sbom-polyglot-java-cdx-gradle-native"
         }
     }
 }

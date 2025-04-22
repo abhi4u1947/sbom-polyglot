@@ -10,7 +10,7 @@ group = 'com.nc'
 version = '1.0-SNAPSHOT'
 
 //noinspection GroovyUnusedAssignment
-archivesBaseName = 'java-sbom-cdx-gradle-native' // This sets the artifactId
+archivesBaseName = 'sbom-polyglot-java-cdx-gradle-native' // This sets the artifactId
 
 java {
     toolchain {
@@ -36,7 +36,7 @@ graalvmNative {
     binaries {
         configureEach {
             buildArgs.add("--enable-sbom=classpath,export")
-            imageName = "java-sbom-cdx-gradle-native"
+            imageName = "sbom-polyglot-java-cdx-gradle-native"
         }
     }
 }

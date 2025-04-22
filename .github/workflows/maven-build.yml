@@ -28,7 +28,7 @@ jobs:
       IMAGE_PUSH: true # Change to true if you want to push images
       IMAGE_REGISTRY: ghcr.io
       IMAGE_GROUP: ${{ github.repository_owner }}
-      IMAGE_NAME: java-sbom-cdx-maven-${{ matrix.project }}
+      IMAGE_NAME: sbom-polyglot-java-cdx-maven-${{ matrix.project }}
       IMAGE_TAG: ${{ github.sha }}
 
       # OCI Metadata
@@ -188,7 +188,7 @@ jobs:
           ${{ env.PROJECT_PATH }}/${{ matrix.project }}/target/*-dependency-cyclonedx.json
           ${{ env.PROJECT_PATH }}/${{ matrix.project }}/target/**/*-dependency-cyclonedx.json
           ${{ env.PROJECT_PATH }}/${{ matrix.project }}/target/quarkus-app/**
-          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/target/java-sbom-cdx-*-native
+          ${{ env.PROJECT_PATH }}/${{ matrix.project }}/target/sbom-polyglot-java-cdx-*-native
           !${{ env.PROJECT_PATH }}/${{ matrix.project }}/target/classes/
         if-no-files-found: ignore
 

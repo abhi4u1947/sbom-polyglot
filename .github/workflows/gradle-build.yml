@@ -28,7 +28,7 @@ jobs:
       IMAGE_PUSH: true # Change to true if you want to push images
       IMAGE_REGISTRY: ghcr.io
       IMAGE_GROUP: ${{ github.repository_owner }}
-      IMAGE_NAME: java-sbom-cdx-gradle-${{ matrix.project }}
+      IMAGE_NAME: sbom-polyglot-java-cdx-gradle-${{ matrix.project }}
       IMAGE_TAG: ${{ github.sha }}
 
       # OCI Metadata
@@ -137,16 +137,16 @@ jobs:
 
     - name: Build JAR with Gradle
       if: matrix.project != 'native'
-      run: ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:build
+      run: ../gradlew --no-daemon :sbom-polyglot-java-cdx-gradle-${{ matrix.project }}:build
       working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
 
     - name: Build Native Executable (only for native project)
       if: matrix.project == 'native'
-      run: ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:nativeCompile
+      run: ../gradlew --no-daemon :sbom-polyglot-java-cdx-gradle-${{ matrix.project }}:nativeCompile
       working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
 
     - name: Generate SBOM
-      run: ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:cyclonedxBom
+      run: ../gradlew --no-daemon :sbom-polyglot-java-cdx-gradle-${{ matrix.project }}:cyclonedxBom
       working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
 
     - name: Extract Version from Gradle Project
@@ -161,7 +161,7 @@ jobs:
     - name: Build Container Image for Quarkus
       if: matrix.project == 'quarkus'
       run: |
-        ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:imageBuild \
+        ../gradlew --no-daemon :sbom-polyglot-java-cdx-gradle-${{ matrix.project }}:imageBuild \
           -DskipTests \
           --info \
           --stacktrace \
@@ -178,7 +178,7 @@ jobs:
     - name: Build Container Image for Spring Boot (Gradle)
       if: matrix.project != 'quarkus'
       run: |
-        ../gradlew --no-daemon :java-sbom-cdx-gradle-${{ matrix.project }}:bootBuildImage -DskipTests --info --stacktrace
+        ../gradlew --no-daemon :sbom-polyglot-java-cdx-gradle-${{ matrix.project }}:bootBuildImage -DskipTests --info --stacktrace
       working-directory: ${{ env.PROJECT_PATH }}/${{ matrix.project }}
 
     - name: Show current workspace (build|target)

@@ -2,12 +2,12 @@ plugins {
     id "org.gradle.toolchains.foojay-resolver-convention" version '0.8.0'
 }
 
-include 'java-sbom-cdx-gradle-normal'
-include 'java-sbom-cdx-gradle-native'
-include 'java-sbom-cdx-gradle-quarkus'
+include 'sbom-polyglot-java-cdx-gradle-normal'
+include 'sbom-polyglot-java-cdx-gradle-native'
+include 'sbom-polyglot-java-cdx-gradle-quarkus'
 
-project(':java-sbom-cdx-gradle-normal').projectDir = file('normal')
-project(':java-sbom-cdx-gradle-native').projectDir = file('native')
-project(':java-sbom-cdx-gradle-quarkus').projectDir = file('quarkus')
+project(':sbom-polyglot-java-cdx-gradle-normal').projectDir = file('normal')
+project(':sbom-polyglot-java-cdx-gradle-native').projectDir = file('native')
+project(':sbom-polyglot-java-cdx-gradle-quarkus').projectDir = file('quarkus')
 
 rootProject.name = 'gradle-parent'
