@@ -2,11 +2,13 @@ name: Maven Build and SBOM
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'java-app/maven-parent/**'
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'java-app/maven-parent/**'
 
 jobs:
   build:

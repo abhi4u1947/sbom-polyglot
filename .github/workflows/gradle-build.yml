@@ -2,11 +2,13 @@ name: Gradle Build and SBOM
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'java-app/gradle-parent/**'
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'java-app/gradle-parent/**'
 
 jobs:
   build:

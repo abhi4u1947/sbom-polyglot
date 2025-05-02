@@ -1,0 +1,40 @@
+name: Go App Build and SBOM
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'go-app/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go-app/**'
+
+jobs:
+  build:
+    name: Build Go App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Get dependencies
+        working-directory: ./go-app
+        run: make mod-download
+
+      - name: Build
+        working-directory: ./go-app
+        run: make build
+
+      - name: Test
+        working-directory: ./go-app
+        run: make test
+
+      - name: Build Docker image
+        working-directory: ./go-app
+        run: docker build -t go-app . 
