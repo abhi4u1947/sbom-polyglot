@@ -29,8 +29,8 @@ all: clean mod-download build
 # Build targets
 build:
 	@echo "Building application on $(DETECTED_OS)..."
-	@$(MKDIR) $(BINARY_DIR)
-	cd src && $(GOBUILD) -o $(BINARY_DIR)$(PATH_SEP)$(BINARY_NAME)
+	@$(MKDIR) ../$(BINARY_DIR)
+	cd src && $(GOBUILD) -o ../$(BINARY_DIR)$(PATH_SEP)$(BINARY_NAME)
 
 # Run targets
 run:
