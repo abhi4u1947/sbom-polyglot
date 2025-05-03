@@ -35,6 +35,7 @@ jobs:
       # CDXGen Config
       FETCH_LICENSE: true
       CDXGEN_DEBUG_MODE: verbose
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -118,6 +119,16 @@ jobs:
     - name: Show extracted artifact tree
       run: tree -a -L 4 ./extracted-artifacts
 
+    - name: Install blint
+      run: pip install blint
+
+    - name: Verify extracted artifacts path
+      run: |
+        if [ ! -d "./extracted-artifacts/go-app" ]; then
+          echo "Error: Path ./extracted-artifacts/go-app does not exist or is empty.";
+          exit 1;
+        fi
+
     - name: SBOM (syft) create output directory
       run: mkdir -p sboms/syft/
 
@@ -126,6 +137,7 @@ jobs:
       uses: anchore/sbom-action@v0.18.0
       with:
         file: ./extracted-artifacts/go-app
+        config: .syft/go-config.yaml
         output-file: sboms/syft/go-app.syft.cdx.json
         format: cyclonedx-json
         upload-artifact: false
@@ -138,6 +150,7 @@ jobs:
         image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         format: cyclonedx-json
         output-file: sboms/syft/go-app-container.syft.cdx.json
+        config: .syft/container-config.yaml
         upload-artifact: false
         upload-release-assets: false
         registry-username: ${{ github.actor }}

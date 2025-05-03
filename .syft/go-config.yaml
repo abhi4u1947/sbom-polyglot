@@ -1,0 +1,46 @@
+output:
+  - "cyclonedx-json"
+
+quiet: false
+check-for-app-update: false
+parallelism: 2
+
+scope: "squashed"
+
+format:
+  cyclonedx-json:
+    pretty: false
+
+file:
+  metadata:
+    selection: "all"
+    digests:
+      - "sha256"
+      - "sha512"
+  content:
+    skip-files-above-size: 1048576
+    globs: []
+
+package:
+  search-indexed-archives: true
+  search-unindexed-archives: false
+  exclude-binary-overlap-by-ownership: true
+
+golang:
+  search-local-mod-cache-licenses: false
+  local-mod-cache-dir: ""
+  search-remote-licenses: true
+  main-module-version:
+    from-ld-flags: true
+    from-build-settings: true
+    from-contents: true
+
+source:
+  file:
+    digests:
+      - "sha256"
+      - "sha512"
+
+log:
+  structured: false
+  level: "error"
