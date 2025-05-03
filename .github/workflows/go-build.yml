@@ -67,7 +67,7 @@ jobs:
         version: v1
 
     - name: Generate SBOM for Go App
-      working-directory: ./go-app
+      working-directory: ./go-app/src
       run: cyclonedx-gomod app -json -licenses -packages -files -output go-app.cdx.json -main src
 
     - name: Build Docker Image for Go App
