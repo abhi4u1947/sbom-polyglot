@@ -133,6 +133,10 @@ jobs:
     - name: SBOM (cdxgen) create output directory
       run: mkdir -p sboms/cdxgen/
 
+    - name: SBOM (cdxgen) Make CDXGen script executable
+      if: env.SKIP_CDXGEN != 'true'
+      run: chmod +x .github/scripts/generate-cdxgen-sbom.sh
+
     - name: SBOM (cdxgen) for Go App Binaries
       if: env.SKIP_CDXGEN != 'true'
       run: .github/scripts/generate-cdxgen-sbom.sh
