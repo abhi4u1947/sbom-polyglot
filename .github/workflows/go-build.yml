@@ -119,9 +119,6 @@ jobs:
     - name: Show extracted artifact tree
       run: tree -a -L 4 ./extracted-artifacts
 
-    - name: Install blint
-      run: pip install blint
-
     - name: SBOM (syft) create output directory
       run: mkdir -p sboms/syft/
 
@@ -152,6 +149,10 @@ jobs:
     - name: SBOM (cdxgen) create output directory
       run: mkdir -p sboms/cdxgen/
 
+    - name: SBOM (cdxgen) Install blint (Binary Analysis)
+      if: env.SKIP_CDXGEN != 'true'
+      run: pip install blint
+
     - name: SBOM (cdxgen) Make CDXGen script executable
       if: env.SKIP_CDXGEN != 'true'
       run: chmod +x .github/scripts/generate-cdxgen-sbom.sh
@@ -179,8 +180,13 @@ jobs:
         path: sboms/
         if-no-files-found: warn
 
-    - name: Install sbomqs
+    - name: Analyze SBOM Install sbomqs
       run: go install github.com/interlynk-io/sbomqs@latest
 
-    - name: Analyze SBOMs with sbomqs
-      run: sbomqs score --basic --recurse sboms/
+    - name: Analyze SBOM (syft) with sbomqs
+      if: env.SKIP_SYFT != 'true'
+      run: sbomqs score --detailed --recurse sboms/syft/
+      
+    - name: Analyze SBOM (cdxgen) with sbomqs
+      if: env.SKIP_CDXGEN != 'true'
+      run: sbomqs score --detailed --recurse sboms/cdxgen/
