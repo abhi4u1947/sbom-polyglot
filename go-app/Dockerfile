@@ -4,7 +4,7 @@ FROM alpine:3.21
 WORKDIR /app
 
 # Copy the pre-built binary from the CI pipeline
-COPY ./bin/go-app .
+COPY ./bin/go-app . && chmod +x go-app && COPY ./bin/go-app.cdx.json .
 
 # Expose port
 EXPOSE 8080
