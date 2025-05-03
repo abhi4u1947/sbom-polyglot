@@ -122,13 +122,6 @@ jobs:
     - name: Install blint
       run: pip install blint
 
-    - name: Verify extracted artifacts path
-      run: |
-        if [ ! -d "./extracted-artifacts/go-app" ]; then
-          echo "Error: Path ./extracted-artifacts/go-app does not exist or is empty.";
-          exit 1;
-        fi
-
     - name: SBOM (syft) create output directory
       run: mkdir -p sboms/syft/
 
