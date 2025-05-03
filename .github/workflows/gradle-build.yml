@@ -314,3 +314,14 @@ jobs:
         name: ${{ env.UPLOAD_SBOM_ARTIFACTS_NAME }}
         path: sboms/
         if-no-files-found: warn
+
+    - name: Analyze SBOM Install sbomqs
+      run: go install github.com/interlynk-io/sbomqs@latest
+
+    - name: Analyze SBOM (syft) with sbomqs
+      if: env.SKIP_SYFT != 'true'
+      run: sbomqs score --detailed --recurse sboms/syft/
+      
+    - name: Analyze SBOM (cdxgen) with sbomqs
+      if: env.SKIP_CDXGEN != 'true'
+      run: sbomqs score --detailed --recurse sboms/cdxgen/
