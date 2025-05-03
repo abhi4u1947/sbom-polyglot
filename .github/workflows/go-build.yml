@@ -183,4 +183,4 @@ jobs:
       run: go install github.com/interlynk-io/sbomqs@latest
 
     - name: Analyze SBOMs with sbomqs
-      run: sbomqs score --basic --recurse --path sboms/
+      run: sbomqs score --basic --recurse sboms/
