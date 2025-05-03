@@ -32,3 +32,10 @@ bin/
 .gradle/
 **/target/
 **/build/
+**/bin/
+**/out/
+**/dist/
+**/nbdist/
+**/nbproject/private/
+**/nbbuild/
+

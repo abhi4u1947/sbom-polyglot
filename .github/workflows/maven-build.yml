@@ -2,11 +2,14 @@ name: Maven Build and SBOM
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'java-app/maven-parent/**'
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'java-app/maven-parent/**'
+      - '.github/workflows/maven-build.yml'
 
 jobs:
   build:
@@ -49,6 +52,8 @@ jobs:
       # CDXGen Config
       FETCH_LICENSE: true
       CDXGEN_DEBUG_MODE: verbose
+
+      CYCLONEDX_CLI_VERSION: v0.27.2 # Set to latest version of CycloneDX CLI
 
     steps:
     - name: Checkout code
@@ -297,3 +302,50 @@ jobs:
         name: ${{ env.UPLOAD_SBOM_ARTIFACTS_NAME }}
         path: sboms/
         if-no-files-found: warn
+
+    - name: Analyze SBOM Install sbomqs
+      run: go install github.com/interlynk-io/sbomqs@latest
+
+    - name: Analyze SBOM (syft) with sbomqs
+      if: env.SKIP_SYFT != 'true'
+      run: |
+        sbomqs score --detailed --recurse sboms/syft/ | tee sboms/sbomqs-syft-analysis.txt
+        echo '### SBOM (Syft) Analysis Report' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/sbomqs-syft-analysis.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+      
+    - name: Analyze SBOM (cdxgen) with sbomqs
+      if: env.SKIP_CDXGEN != 'true'
+      run: |
+        sbomqs score --detailed --recurse sboms/cdxgen/ | tee sboms/sbomqs-cdxgen-analysis.txt
+        echo '### SBOM (Cdxgen) Analysis Report' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/sbomqs-cdxgen-analysis.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Download CycloneDX CLI
+      if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
+      run: |
+        VERSION=${{ env.CYCLONEDX_CLI_VERSION || 'v0.27.2' }}
+        curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -o cyclonedx-cli "https://github.com/CycloneDX/cyclonedx-cli/releases/download/$VERSION/cyclonedx-linux-x64"
+        chmod +x cyclonedx-cli
+
+    - name: Compare SBOMs for App Binaries
+      if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
+      run: |
+        ./cyclonedx-cli diff ./sboms/cdxgen/${{ env.IMAGE_NAME }}.cdxgen.cdx.json ./sboms/syft/${{ env.IMAGE_NAME }}.syft.cdx.json --component-versions | tee sboms/app-binaries-diff.txt
+        echo '### SBOM Diff - [cdxgen/${{ env.IMAGE_NAME }}.cdxgen.cdx.json] vs [syft/${{ env.IMAGE_NAME }}.syft.cdx.json]' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/app-binaries-diff.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Compare SBOMs for Containers
+      if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
+      run: |
+        ./cyclonedx-cli diff ./sboms/cdxgen/${{ env.IMAGE_NAME }}-container.cdxgen.cdx.json ./sboms/syft/${{ env.IMAGE_NAME }}-container.syft.cdx.json --component-versions | tee sboms/container-diff.txt
+        echo '### SBOM Diff - [cdxgen/${{ env.IMAGE_NAME }}-container.cdxgen.cdx.json] vs [syft/${{ env.IMAGE_NAME }}-container.syft.cdx.json]' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/container-diff.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY

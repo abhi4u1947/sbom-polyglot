@@ -1,0 +1,232 @@
+name: Go App Build and SBOM
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'go-app/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go-app/**'
+      - '.github/workflows/go-build.yml'
+
+jobs:
+  build:
+    name: Build and Generate SBOM for Go App
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_PUSH: true # Change to true if you want to push images
+      IMAGE_REGISTRY: ghcr.io
+      IMAGE_GROUP: ${{ github.repository_owner }}
+      IMAGE_NAME: sbom-polyglot-go-app
+      IMAGE_TAG: ${{ github.sha }}
+
+      # OCI Metadata
+      IMAGE_AUTHOR: ${{ github.actor }}
+      IMAGE_SOURCE: https://github.com/${{ github.repository }}
+      IMAGE_LICENSE: Apache-2.0
+
+      UPLOAD_ARTIFACTS_NAME: go-app-artifacts
+      UPLOAD_SBOM_ARTIFACTS_NAME: go-app-sboms
+      SKIP_CDXGEN: false  # Set to false to re-enable Cdxgen
+      SKIP_SYFT: false  # Set to false to re-enable Syft
+
+      # CDXGen Config
+      FETCH_LICENSE: true
+      CDXGEN_DEBUG_MODE: verbose
+
+      CYCLONEDX_CLI_VERSION: v0.27.2 # Set to latest version of CycloneDX CLI
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js (latest LTS)
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'lts/*'
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go-app/src/go.mod'
+        cache-dependency-path: go-app/src/go.sum
+
+    - name: Verify Node and npm version
+      run: |
+        node -v
+        npm -v
+
+    - name: Install cdxgen CLI
+      run: npm install -g @cyclonedx/cdxgen
+
+    - name: Install Make
+      run: sudo apt-get install -y make
+
+    - name: Get dependencies
+      working-directory: ./go-app
+      run: make mod-download
+
+    - name: Build Go App
+      working-directory: ./go-app
+      run: make build
+
+    - name: Test Go App
+      working-directory: ./go-app
+      run: make test
+
+    - name: Download cyclonedx-gomod
+      uses: CycloneDX/gh-gomod-generate-sbom@v2
+      with:
+        version: v1
+
+    - name: Generate SBOM for Go App
+      working-directory: ./go-app/src
+      run: cyclonedx-gomod app -json -licenses -packages -files -output ../bin/go-app.cdx.json -main .
+
+    - name: Build Docker Image for Go App
+      working-directory: ./go-app
+      run: |
+        docker build \
+          --build-arg IMAGE_AUTHOR="${{ env.IMAGE_AUTHOR }}" \
+          --build-arg IMAGE_SOURCE="${{ env.IMAGE_SOURCE }}" \
+          --build-arg IMAGE_LICENSE="${{ env.IMAGE_LICENSE }}" \
+          -t ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+
+    - name: Login to GitHub Container Registry (for pushing final image)
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GIT_ACTIONS_PAT }}
+
+    - name: Push Docker Image
+      if: env.IMAGE_PUSH == 'true'
+      run: docker push ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.UPLOAD_ARTIFACTS_NAME }}
+        path: |
+          ./go-app/bin/**
+        if-no-files-found: ignore
+
+    - name: Download Uploaded Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.UPLOAD_ARTIFACTS_NAME }}
+        path: ./extracted-artifacts
+
+    - name: Show extracted artifact tree
+      run: tree -a -L 4 ./extracted-artifacts
+
+    - name: SBOM (syft) create output directory
+      run: mkdir -p sboms/syft/
+
+    - name: SBOM (syft) for Go App Binaries
+      if: env.SKIP_SYFT != 'true'
+      uses: anchore/sbom-action@v0.18.0
+      with:
+        file: ./extracted-artifacts/go-app
+        config: .syft/go-config.yaml
+        output-file: sboms/syft/go-app.syft.cdx.json
+        format: cyclonedx-json
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: SBOM (syft) for Container Image
+      if: env.SKIP_SYFT != 'true'
+      uses: anchore/sbom-action@v0.18.0
+      with:
+        image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        format: cyclonedx-json
+        output-file: sboms/syft/go-app-container.syft.cdx.json
+        config: .syft/container-config.yaml
+        upload-artifact: false
+        upload-release-assets: false
+        registry-username: ${{ github.actor }}
+        registry-password: ${{ secrets.GIT_ACTIONS_PAT }}
+
+    - name: SBOM (cdxgen) create output directory
+      run: mkdir -p sboms/cdxgen/
+
+    - name: SBOM (cdxgen) Install blint (Binary Analysis)
+      if: env.SKIP_CDXGEN != 'true'
+      run: pip install blint
+
+    - name: SBOM (cdxgen) Make CDXGen script executable
+      if: env.SKIP_CDXGEN != 'true'
+      run: chmod +x .github/scripts/generate-cdxgen-sbom.sh
+
+    - name: SBOM (cdxgen) for Go App Binaries
+      if: env.SKIP_CDXGEN != 'true'
+      run: .github/scripts/generate-cdxgen-sbom.sh
+      env:
+        CONF_PROJECT_DIR: ./extracted-artifacts/go-app
+        CONF_ECOSYSTEMS: go binary
+        CONF_RESULT_PATH: sboms/cdxgen/go-app.cdxgen.cdx.json
+
+    - name: SBOM (cdxgen) for Container Image
+      if: env.SKIP_CDXGEN != 'true'
+      run: .github/scripts/generate-cdxgen-sbom.sh
+      env:
+        CONF_PROJECT_DIR: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_GROUP }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        CONF_ECOSYSTEMS: docker
+        CONF_RESULT_PATH: sboms/cdxgen/go-app-container.cdxgen.cdx.json
+
+    - name: Upload Combined SBOMs (ALL)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.UPLOAD_SBOM_ARTIFACTS_NAME }}
+        path: sboms/
+        if-no-files-found: warn
+
+    - name: Analyze SBOM Install sbomqs
+      run: go install github.com/interlynk-io/sbomqs@latest
+
+    - name: Analyze SBOM (syft) with sbomqs
+      if: env.SKIP_SYFT != 'true'
+      run: |
+        sbomqs score --detailed --recurse sboms/syft/ | tee sboms/sbomqs-syft-analysis.txt
+        echo '### SBOM (Syft) Analysis Report' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/sbomqs-syft-analysis.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+      
+    - name: Analyze SBOM (cdxgen) with sbomqs
+      if: env.SKIP_CDXGEN != 'true'
+      run: |
+        sbomqs score --detailed --recurse sboms/cdxgen/ | tee sboms/sbomqs-cdxgen-analysis.txt
+        echo '### SBOM (Cdxgen) Analysis Report' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/sbomqs-cdxgen-analysis.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Download CycloneDX CLI
+      if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
+      run: |
+        VERSION=${{ env.CYCLONEDX_CLI_VERSION || 'v0.27.2' }}
+        curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -o cyclonedx-cli "https://github.com/CycloneDX/cyclonedx-cli/releases/download/$VERSION/cyclonedx-linux-x64"
+        chmod +x cyclonedx-cli
+
+    - name: Compare SBOMs for App Binaries
+      if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
+      run: |
+        ./cyclonedx-cli diff ./sboms/cdxgen/go-app.cdxgen.cdx.json ./sboms/syft/go-app.syft.cdx.json --component-versions | tee sboms/app-binaries-diff.txt
+        echo '### SBOM Diff - [cdxgen/go-app.cdxgen.cdx.json] vs [syft/go-app.syft.cdx.json]' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/app-binaries-diff.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+    - name: Compare SBOMs for Containers
+      if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
+      run: |
+        ./cyclonedx-cli diff ./sboms/cdxgen/go-app-container.cdxgen.cdx.json ./sboms/syft/go-app-container.syft.cdx.json --component-versions | tee sboms/container-diff.txt
+        echo '### SBOM Diff - [cdxgen/go-app-container.cdxgen.cdx.json] vs [syft/go-app-container.syft.cdx.json]' >> $GITHUB_STEP_SUMMARY
+        echo '```html' >> $GITHUB_STEP_SUMMARY
+        cat sboms/container-diff.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
