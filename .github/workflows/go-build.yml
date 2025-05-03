@@ -178,3 +178,9 @@ jobs:
         name: ${{ env.UPLOAD_SBOM_ARTIFACTS_NAME }}
         path: sboms/
         if-no-files-found: warn
+
+    - name: Install sbomqs
+      run: go install github.com/interlynk-io/sbomqs@latest
+
+    - name: Analyze SBOMs with sbomqs
+      run: sbomqs score --basic --recurse --path sboms/
