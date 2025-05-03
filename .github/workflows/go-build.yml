@@ -39,10 +39,23 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - name: Set up Node.js (latest LTS)
+      uses: actions/setup-node@v4
       with:
-        go-version: '1.21'
+        node-version: 'lts/*'
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'  # Or latest stable
+
+    - name: Verify Node and npm version
+      run: |
+        node -v
+        npm -v
+
+    - name: Install cdxgen CLI
+      run: npm install -g @cyclonedx/cdxgen
 
     - name: Install Make
       run: sudo apt-get install -y make
