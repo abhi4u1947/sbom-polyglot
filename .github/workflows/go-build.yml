@@ -50,7 +50,8 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'  # Or latest stable
+        go-version-file: 'go-app/src/go.mod'
+        cache-dependency-path: go-app/src/go.sum
 
     - name: Verify Node and npm version
       run: |
@@ -215,7 +216,7 @@ jobs:
       if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
       run: |
         ./cyclonedx-cli diff ./sboms/cdxgen/go-app.cdxgen.cdx.json ./sboms/syft/go-app.syft.cdx.json --component-versions | tee sboms/app-binaries-diff.txt
-        echo '### SBOM Diff for App Binaries' >> $GITHUB_STEP_SUMMARY
+        echo '### SBOM Diff - [cdxgen/go-app.cdxgen.cdx.json] vs [syft/go-app.syft.cdx.json]' >> $GITHUB_STEP_SUMMARY
         echo '```html' >> $GITHUB_STEP_SUMMARY
         cat sboms/app-binaries-diff.txt >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
@@ -224,7 +225,7 @@ jobs:
       if: env.SKIP_CDXGEN != 'true' && env.SKIP_SYFT != 'true'
       run: |
         ./cyclonedx-cli diff ./sboms/cdxgen/go-app-container.cdxgen.cdx.json ./sboms/syft/go-app-container.syft.cdx.json --component-versions | tee sboms/container-diff.txt
-        echo '### SBOM Diff for Containers' >> $GITHUB_STEP_SUMMARY
+        echo '### SBOM Diff - [cdxgen/go-app-container.cdxgen.cdx.json] vs [syft/go-app-container.syft.cdx.json]' >> $GITHUB_STEP_SUMMARY
         echo '```html' >> $GITHUB_STEP_SUMMARY
         cat sboms/container-diff.txt >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
