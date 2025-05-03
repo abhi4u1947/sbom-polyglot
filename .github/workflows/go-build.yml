@@ -112,7 +112,7 @@ jobs:
       if: env.SKIP_SYFT != 'true'
       uses: anchore/sbom-action@v0.18.0
       with:
-        path: ./go-app/bin/go-app
+        file: ./extracted-artifacts/go-app
         output-file: sboms/syft/go-app.syft.cdx.json
         format: cyclonedx-json
         upload-artifact: false
@@ -137,7 +137,7 @@ jobs:
       if: env.SKIP_CDXGEN != 'true'
       run: .github/scripts/generate-cdxgen-sbom.sh
       env:
-        CONF_PROJECT_DIR: ./go-app/bin/go-app
+        CONF_PROJECT_DIR: ./extracted-artifacts/go-app
         CONF_ECOSYSTEMS: go binary
         CONF_RESULT_PATH: sboms/cdxgen/go-app.cdxgen.cdx.json
 
