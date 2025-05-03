@@ -9,6 +9,7 @@ on:
     branches: [ main ]
     paths:
       - 'go-app/**'
+      - '.github/workflows/go-build.yml'
 
 jobs:
   build:
@@ -229,4 +230,3 @@ jobs:
         echo '```html' >> $GITHUB_STEP_SUMMARY
         cat sboms/container-diff.txt >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-
